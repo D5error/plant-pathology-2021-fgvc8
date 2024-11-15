@@ -2,110 +2,121 @@
 import os
 from PIL import Image
 from matplotlib import pyplot as plt
+import numpy as np
 import pandas as pd
-from sklearn.calibration import LabelEncoder
 from torch.utils.data import DataLoader
+from collections import defaultdict
 import torch
 
 
 class Plant_dataset: 
     def __init__(self, dataset_path, train_or_test, checkpoint_path, transform=None):
+        # 保存参数
         self.checkpoint_path = checkpoint_path # 模型保存的路径
         self.dataset_path = dataset_path # 数据集的路径
         self.transform = transform # 预处理（数据增强等）
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu' # 如果有NVIDA显卡，转到GPU训练，否则用CPU
         print(f"正在使用{self.device}")
-        self.encoder = LabelEncoder() # 使用 LabelEncoder 进行标签编码
-        # 解编码：encoder.inverse_transform(y_encoded)
 
         # 读取数据集
         csv = pd.read_csv(self.dataset_path + "/" + train_or_test + "/"  + train_or_test + '_label.csv')
-        
+        csv = one_hot_encode(csv) # 独热编码
+
         # 获取图像路径和标签
         self.images_path, self.labels = [], []
         for _, row in csv.iterrows():
             image_path = os.path.join(self.dataset_path + "/" + train_or_test + '/images', row['images'])
             self.images_path.append(image_path)
-            self.labels.append(row['labels'])
-        self.labels = self.encoder.fit_transform(self.labels) # 将标签编码
 
+            # 获取读热编码后的标签
+            label = row.drop('images').drop('labels')
+            label = label.astype(np.float32) # 将标签转换为纯数字类型（确保是浮点型或整型）
+            self.labels.append(label.values)
 
-    def __len__(self): # 获取标签长度
+    # 数据集的大小
+    def __len__(self): 
         return len(self.labels)    
 
-
-    def __getitem__(self, idx): # 获取图像的标签
+    # 获取图像和标签
+    def __getitem__(self, idx): 
         img = Image.open(self.images_path[idx])
-        label = self.labels[idx]
+        label = torch.tensor(self.labels[idx], dtype=torch.float32)
+
         # 图像预处理
         if self.transform: 
             img = self.transform(img)
 
         return img, label
 
-
-    def test(self, dataloader, model, loss_function):
+    # 测试
+    def test(self, dataLoader, model, loss_function):
         model.eval() # 设置为评估模式
 
         total_loss, total_acc = 0.0, 0.0
 
         with torch.no_grad(): # 不计算梯度
-            for batch_idx, (x, y) in enumerate(dataloader):
+            for batch_idx, (x, y) in enumerate(dataLoader):
+                print(f"\rbatch_index: {batch_idx} / {len(dataLoader) - 1}", end="")
                 x, y = x.to(self.device), y.to(self.device)
+
+                # 模型输出
                 output = model(x)
                 batch_loss = loss_function(output, y)
                 total_loss += batch_loss.item()
-                _, pred = torch.max(output, axis=1)
-                correct = torch.sum(pred == y).item()
+
+                # 计算准确率
+                preds = torch.softmax(output, dim=1)  # 使用 softmax 对每一类的概率进行归一化
+                pred_classes = torch.argmax(preds, dim=1)  # 获取最大概率对应的类别索引
+                correct = torch.sum(pred_classes == torch.argmax(y, dim=1)).item()  # one-hot 编码情况下获取正确的标签索引
                 batch_acc = correct / output.shape[0]
                 total_acc += batch_acc
-                print(f"\rbatch_index: {batch_idx} / {len(dataloader)-1}", end="")
+        
+        # 平均误差
+        avg_loss = total_loss / len(dataLoader)
+        print(f"\n平均测试误差: {avg_loss}")
 
-        avg_loss = total_loss / len(dataloader)
-        avg_acc = total_acc / len(dataloader)
-        print(f"\rtest avg_loss: {avg_loss}")
-        print(f"test avg_acc: {100 * avg_acc:.4f}%")
+        # 平均准确率
+        avg_acc = total_acc / len(dataLoader)
+        print(f"平均测试准确率: {100 * avg_acc:.4f}%")
 
-
+    # 训练
     def train(self, num_epoch, dataLoader, model, loss_function, optimizer):
         total_loss, total_acc = [], []
 
         for epoch in range (0, num_epoch): 
-            print(f"\nepoch: {epoch}")
+            print(f"\nepoch: {epoch + 1} / {num_epoch}")
             epoch_loss, epoch_acc = 0.0, 0.0
             
             for batch_idx, (x, y) in enumerate(dataLoader):
                 print(f"\rbatch_index: {batch_idx} / {len(dataLoader) - 1}", end="")
                 x, y = x.to(self.device), y.to(self.device)
+
+                # 模型输出
                 output = model(x)
                 batch_loss = loss_function(output, y)
                 epoch_loss += batch_loss.item()
-                # torch.max(input, dim)函数
-                # input是具体的tensor，dim是max函数索引的维度，0是每列的最大值，1是每行的最大值输出
-                # 函数会返回两个tensor，第一个tensor是每行的最大值；第二个tensor是每行最大值的索引
-                _, pred = torch.max(output, axis=1)
-                correct = torch.sum(pred == y).item()
-                # 计算每批次的准确率
-                # output.shape[0]一维长度为该批次的数量
-                # torch.sum()对输入的tensor数据的某一维度求和
+                
+                # 计算准确率
+                preds = torch.softmax(output, dim=1)  # 使用 softmax 对每一类的概率进行归一化
+                pred_classes = torch.argmax(preds, dim=1)  # 获取最大概率对应的类别索引
+                correct = torch.sum(pred_classes == torch.argmax(y, dim=1)).item()  # one-hot 编码情况下获取正确的标签索引
                 batch_acc = correct / output.shape[0]
-                epoch_acc += batch_acc
+                total_acc += batch_acc
+
                 # 反向传播及优化
-                # 清空过往梯度
                 optimizer.zero_grad()
-                # 反向传播，计算当前梯度
                 batch_loss.backward()
-                # 根据梯度更新网络参数
                 optimizer.step()
 
-            print(f"\rtotal epoch: {num_epoch}")
+            # 平均误差
             avg_loss = epoch_loss / len(dataLoader)
             total_loss.append(avg_loss)
-            print('train avg_loss:',  avg_loss)
+            print(f'\n平均训练误差: {avg_loss}')
 
+            # 平均准确率
             avg_acc = epoch_acc / len(dataLoader)
             total_acc.append(avg_acc)
-            print(f'train avg_acc: {100 * avg_acc:.2f}%')
+            print(f'平均训练准确率: {100 * avg_acc:.2f}%')
 
         '''
         这里加点可视化，如误差曲线，ROC等等
@@ -117,6 +128,23 @@ class Plant_dataset:
         plt.show()
 
 
+# 定义独热编码函数
+def one_hot_encode(data, column='labels'):
+    # 提取data[column]到datadct，键为类型，值为索引
+    datadct = defaultdict(list)
+    for i, label in enumerate(data[column]):
+        for category in label.split():
+            datadct[category].append(i)
+
+    # 将字典转换为 numpy 数组
+    datadct = {key: np.array(val) for key, val in datadct.items()}
+    
+    # 独热编码
+    new_df = pd.DataFrame(np.zeros((data.shape[0], len(datadct.keys())), dtype=np.int8), columns=datadct.keys())
+    for key, val in datadct.items():
+        new_df.loc[val, key] = 1
+
+    return pd.concat([data, new_df], axis=1)
 
 # 运行
 def start(dataset_path, transform, train_or_test, checkpoint_path, batch_size, num_workers, model, loss_function, optimizer, num_epoch):
@@ -129,3 +157,9 @@ def start(dataset_path, transform, train_or_test, checkpoint_path, batch_size, n
     elif train_or_test == "test": # 测试
         model.load_state_dict(torch.load(checkpoint_path, weights_only=True))
         dataset.test(dataLoader, model, loss_function)
+
+# 测试bug用
+if __name__ == "__main__":
+    data = pd.read_csv("./plant_dataset/test/test_label.csv")
+    data = one_hot_encode(data)
+    print(data)
