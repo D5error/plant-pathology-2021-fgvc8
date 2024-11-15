@@ -5,18 +5,18 @@ from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 from torch.utils.data import DataLoader
-from collections import defaultdict
 import torch
 
 
 class Plant_dataset: 
-    def __init__(self, dataset_path, train_or_test, checkpoint_path, transform, labels_name):
+    def __init__(self, dataset_path, train_or_test, checkpoint_path, transform, labels_name, threshold):
         # 保存参数
         self.checkpoint_path = checkpoint_path # 模型保存的路径
         self.dataset_path = dataset_path # 数据集的路径
         self.transform = transform # 预处理（数据增强等）
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu' # 如果有NVIDA显卡，转到GPU训练，否则用CPU
         self.labels_name = labels_name # 标签名称
+        self.threshold = threshold # 分类阈值
         print(f"正在使用{self.device}")
 
         # 读取数据集
@@ -58,17 +58,17 @@ class Plant_dataset:
             for batch_idx, (x, y) in enumerate(dataLoader):
                 print(f"\rbatch_index: {batch_idx} / {len(dataLoader) - 1}", end="")
                 x, y = x.to(self.device), y.to(self.device)
+    
+                # 核心部分
+                output = model(x) # 模型输出
+                batch_loss = loss_function(output, y) # 当前batch误差
+                preds = torch.sigmoid(output) # 激活函数归一化
+                pred_labels = (preds > self.threshold).float() # 概率大于阈值预测为1
+                correct = torch.sum(pred_labels == y).item() # 计算匹配的标签数
+                batch_acc = correct / y.numel() # 当前batch准确率
 
-                # 模型输出
-                output = model(x)
-                batch_loss = loss_function(output, y)
+                # 保存
                 total_loss += batch_loss.item()
-
-                # 计算准确率
-                preds = torch.softmax(output, dim=1)  # 使用 softmax 对每一类的概率进行归一化
-                pred_classes = torch.argmax(preds, dim=1)  # 获取最大概率对应的类别索引
-                correct = torch.sum(pred_classes == torch.argmax(y, dim=1)).item()  # one-hot 编码情况下获取正确的标签索引
-                batch_acc = correct / output.shape[0]
                 total_acc += batch_acc
         
         # 平均误差
@@ -91,17 +91,17 @@ class Plant_dataset:
                 print(f"\rbatch_index: {batch_idx} / {len(dataLoader) - 1}", end="")
                 x, y = x.to(self.device), y.to(self.device)
 
-                # 模型输出
-                output = model(x)
-                batch_loss = loss_function(output, y)
+                # 核心部分
+                output = model(x) # 模型输出
+                batch_loss = loss_function(output, y) # 当前batch误差
+                preds = torch.sigmoid(output) # 激活函数归一化
+                pred_labels = (preds > self.threshold).float() # 概率大于阈值预测为1
+                correct = torch.sum(pred_labels == y).item() # 计算匹配的标签数
+                batch_acc = correct / y.numel() # 当前batch准确率
+
+                # 保存
                 epoch_loss += batch_loss.item()
-                
-                # 计算准确率
-                preds = torch.softmax(output, dim=1)  # 使用 softmax 对每一类的概率进行归一化
-                pred_classes = torch.argmax(preds, dim=1)  # 获取最大概率对应的类别索引
-                correct = torch.sum(pred_classes == torch.argmax(y, dim=1)).item()  # one-hot 编码情况下获取正确的标签索引
-                batch_acc = correct / output.shape[0]
-                total_acc += batch_acc
+                epoch_acc += batch_acc
 
                 # 反向传播及优化
                 optimizer.zero_grad()
@@ -143,13 +143,12 @@ def one_hot_encode(data, labels_name, column='labels'):
     for x, all_label in enumerate(labels):
         for y in all_label:
             new_df.iloc[x, y] = 1
-    print(new_df)
 
     return pd.concat([data, new_df], axis=1)
 
 # 运行
-def start(dataset_path, transform, train_or_test, checkpoint_path, batch_size, num_workers, model, loss_function, optimizer, num_epoch, labels_name):
-    dataset = Plant_dataset(dataset_path, train_or_test, checkpoint_path, transform, labels_name) # 加载数据集
+def start(dataset_path, transform, train_or_test, checkpoint_path, batch_size, num_workers, model, loss_function, optimizer, num_epoch, labels_name, threshold):
+    dataset = Plant_dataset(dataset_path, train_or_test, checkpoint_path, transform, labels_name, threshold) # 加载数据集
     dataLoader = DataLoader(dataset, batch_size, True, num_workers = num_workers)
 
     if train_or_test == "train": # 训练
@@ -187,9 +186,9 @@ if __name__ == "__main__":
         "healthy", # 健康
         "frog_eye_leaf_spot", # 蛙眼叶斑病
         "rust", # 锈病
-        "complex", # 复杂病（可能是多种病害的组合）
+        "complex", # 复杂病
         "powdery_mildew" # 白粉病
     ]
     data = pd.read_csv("./plant_dataset/test/test_label.csv")
     data = one_hot_encode(data, labels_name)
-    # print(data)
+    print(data)
