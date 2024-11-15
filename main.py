@@ -5,16 +5,17 @@ from torch import nn
 import torch
 import Plant_dataset
 from models import *
+from albumentations.pytorch import ToTensorV2
 
 
 if __name__ == "__main__":
     dataset_path = "./plant_dataset" # 数据集的路径
-    checkpoint_path = "./checkpoint.pth" # 模型保存的路径
+    checkpoint_path = "./save_model/checkpoint.pth" # 模型保存的路径
     # 图像预处理
     transform = transforms.Compose([
         transforms.Resize((224, 224)), # 调整图像大小
-        transforms.ToTensor(), # 将图像转为张量
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) # 标准化（适用于预训练模型）
+        ToTensorV2(), # 将图像转为张量
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], max_pixel_value=255.0, p=1.0) # 标准化（适用于预训练模型）
     ])
     model = LeNet5(num_classes=12) # 创建模型
     loss_function = nn.CrossEntropyLoss() # 定义损失函数（交叉熵损失）
