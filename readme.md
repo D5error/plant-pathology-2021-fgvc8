@@ -8,7 +8,6 @@
 # 记录
 * 多标签分类：
     * [激活函数的选择](https://zhuanlan.zhihu.com/p/500347063)
-    * [计算精准率]()
 
 # 要求
 ![alt text](./assets/image-4.png)
