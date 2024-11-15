@@ -1,7 +1,7 @@
 /LeNet
-/plant_dataset/test
-/plant_dataset/train
-/plant_dataset/val
 /tmp.py
 /miniset
 /miniset/MNIST/raw
+/plant_dataset/train/images
+/plant_dataset/test/images
+/plant_dataset/val/images
