@@ -7,11 +7,11 @@
 6. 检查有没有错误的地方
 
 # 要求
-![alt text](./img/image-4.png)
-![alt text](./img/image-3.png)
-![alt text](./img/image-2.png)
-![alt text](./img/image-1.png)
-![alt text](./img/image.png)
+![alt text](./assets/image-4.png)
+![alt text](./assets/image-3.png)
+![alt text](./assets/image-2.png)
+![alt text](./assets/image-1.png)
+![alt text](./assets/image.png)
 
 * 数据集百度网盘链接
     * https://pan.baidu.com/s/1N10URTnXCaWbBWlRLISAWg?pwd=zvjs
@@ -26,9 +26,9 @@
 
 # 运行结果
 * LeNet5，30 epoch
-    * ![alt text](./img/image7.png)
-    * ![alt text](./img/image-5.png)
-    * ![alt text](./img/image-6.png)
+    * ![alt text](./assets/image7.png)
+    * ![alt text](./assets/image-5.png)
+    * ![alt text](./assets/image-6.png)
 
 
 # 模型
