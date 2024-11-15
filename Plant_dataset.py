@@ -107,11 +107,14 @@ class Plant_dataset:
             total_acc.append(avg_acc)
             print(f'train avg_acc: {100 * avg_acc:.2f}%')
 
-        plt.subplot(121)
-        plt.plot(range(num_epoch), total_loss)
-        plt.subplot(122)
-        plt.plot(range(num_epoch), total_acc)
-        plt.show()
+            '''
+            这里加点可视化，如误差曲线，ROC等等
+            '''
+            plt.subplot(121)
+            plt.plot(range(num_epoch), total_loss)
+            plt.subplot(122)
+            plt.plot(range(num_epoch), total_acc)
+            plt.show()
 
 
 

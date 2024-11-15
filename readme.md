@@ -26,7 +26,7 @@
 
 # 运行结果
 * LeNet5，30 epoch
-    * ![alt text](image.png)
+    * ![alt text](./img/image7.png)
     * ![alt text](./img/image-5.png)
     * ![alt text](./img/image-6.png)
 
