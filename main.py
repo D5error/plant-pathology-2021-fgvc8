@@ -13,7 +13,7 @@ if __name__ == "__main__":
     # 图像预处理
     transform = transforms.Compose([
         transforms.Resize((224, 224)), # 调整图像大小
-        transforms.ToTensor(), # 将图像转为张量
+        transforms.ToTensor(), # 将图像PIL转pytorch为张量
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) # 标准化（适用于预训练模型）
     ])
     model = LeNet5(num_classes=12) # 创建模型
