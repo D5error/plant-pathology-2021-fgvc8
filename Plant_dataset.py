@@ -71,7 +71,7 @@ class Plant_dataset:
         total_loss, total_acc = [], []
 
         for epoch in range (0, num_epoch): 
-            print(f"epoch: {epoch}")
+            print(f"\nepoch: {epoch}")
             epoch_loss, epoch_acc = 0.0, 0.0
             
             for batch_idx, (x, y) in enumerate(dataLoader):
