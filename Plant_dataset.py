@@ -98,9 +98,10 @@ class Plant_dataset:
                 # 根据梯度更新网络参数
                 optimizer.step()
 
+            print(f"\rtotal epoch: {num_epoch}")
             avg_loss = epoch_loss / len(dataLoader)
             total_loss.append(avg_loss)
-            print('\rtrain avg_loss:',  avg_loss)
+            print('train avg_loss:',  avg_loss)
 
             avg_acc = epoch_acc / len(dataLoader)
             total_acc.append(avg_acc)
