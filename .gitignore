@@ -1,0 +1,11 @@
+/LeNet
+/tmp.py
+/miniset
+/miniset/MNIST/raw
+/plant_dataset/train/images
+/plant_dataset/test/images
+/plant_dataset/val/images
+/tempCodeRunnerFile.py
+/save_model
+/__pycache__
+/.vscode
