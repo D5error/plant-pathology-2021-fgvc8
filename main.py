@@ -84,24 +84,34 @@ if __name__ == "__main__":
     Vgg16 = select_model("Vgg16")
 
     # 训练
-    model = LeNet5 # 使用的模型
+    train_model = LeNet5 # 使用的模型
     trainer = Trainer(
         dataset = train_dataset, # 训练集
         batch_size = 8, # 批量大小
         num_workers = 6, # 加载数据时的并行度
-        model = model,
-        optimizer = torch.optim.SGD(model.parameters(), lr=1e-5, momentum=0.5), # 优化器(随机梯度下降法)
+        model = train_model,
+        optimizer = torch.optim.SGD(train_model.parameters(), lr=1e-5, momentum=0.5), # 优化器(随机梯度下降法)
         loss_function = BinaryCrossEntropyLoss(), # 损失函数
     )
     trainer.train(
         num_epoch = 1000, # 训练轮数
-        checkpoint_path = "./save_model/LeNet5_epoch_2.pth", # 检查点
+        checkpoint_path = "./save_model/LeNet5_epoch_4.pth", # 检查点
         val_dataset = validate_dataset # 验证集
     )
 
     # 测试
-    tester = Tester()
-
+    # test_model = LeNet5 # 使用的模型
+    # tester = Tester(
+    #     model = test_model,
+    #     loss_function = BinaryCrossEntropyLoss(), # 损失函数
+    #     optimizer = torch.optim.SGD(test_model.parameters(), lr=1e-5, momentum=0.5), # 优化器
+    # )
+    # tester.test(
+    #     checkpoint_path = "./save_model/LeNet5_epoch_4.pth", # 检查点
+    #     batch_size = 8, # 批量大小
+    #     num_workers = 6, # 加载数据时的并行度
+    #     dataset = validate_dataset, # 测试集
+    # )
 
     # 图片预测
     # img_path = r"plant_dataset\train\images\ccb152972a7a6555.jpg" # 图片路径

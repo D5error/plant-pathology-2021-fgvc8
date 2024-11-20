@@ -90,7 +90,6 @@ class Trainer:
         save_path = f"./save_model/{model_name}_epoch_{epoch}.pth"
         torch.save(state, save_path)
         print(f"模型已保存至{save_path}")
-        return save_path
 
     # 加载模型检查点
     def load_checkpoint(self, checkpoint_path):
@@ -144,12 +143,12 @@ class Trainer:
             print(f'\r训练集：平均误差 = {avg_loss}')
 
             # 保存
-            save_path = None
             if epoch % 2 == 0 or epoch == num_epoch:
-                save_path = self.save_checkpoint(epoch)
+                self.save_checkpoint(epoch)
 
             # 验证
-            if epoch % 5 == 0:
+            if epoch % 4 == 0:
+                save_path = f"./save_model/{self.model.get_name()}_epoch_{epoch}.pth"
                 self.tester.test(save_path, val_dataset, self.batch_size, self.num_workers)
 
 
@@ -219,7 +218,7 @@ class Tester:
         # 平均误差
         avg_loss = total_loss / batch_len
         print(f"\r测试或验证集：平均误差 = {avg_loss}")
-        print(f"测试或验证集：预测正确数量 = {correct_num} / {self.data_len}")
+        print(f"测试或验证集：预测正确数量 = {correct_num} / {len(dataset)}")
         '''
         评价指标
         '''
