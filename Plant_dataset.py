@@ -12,6 +12,7 @@ import torch
 class Plant_dataset:
     def __init__(self, csv_path, imgs_path, labels_name, transform):
         self.__transform = transform
+        self.path = imgs_path
         self.__imgs_path = []
 
         csv = pd.read_csv(csv_path)
@@ -30,6 +31,10 @@ class Plant_dataset:
     # 数据集的大小
     def __len__(self): 
         return len(self.__labels)    
+
+    # 获取数据集路径
+    def get_imgs_path(self):
+        return self.path
 
     # 获取图像和标签
     def __getitem__(self, idx): 
@@ -59,15 +64,24 @@ class Plant_dataset:
 
 # 训练
 class Trainer:
-    def __init__(self, dataset, batch_size, num_workers, model, optimizer, loss_function):
-        self.dataLoader = DataLoader(
-            dataset = dataset, 
+    def __init__(self, train_dataset, val_dataset, batch_size, num_workers, model, optimizer, loss_function):
+        self.train_dataLoader = DataLoader(
+            dataset = train_dataset, 
             batch_size = batch_size, 
             shuffle = True, 
             num_workers = num_workers,
             pin_memory = True
         )
-        self.dataset = dataset
+        self.val_dataLoader = DataLoader(
+            dataset = val_dataset,
+            batch_size = batch_size, 
+            shuffle = True, 
+            num_workers = num_workers,
+            pin_memory = True
+        )
+
+        self.train_dataset = train_dataset
+        self.val_dataset = val_dataset
         self.num_workers = num_workers
         self.model = model
         self.batch_size = batch_size
@@ -80,11 +94,15 @@ class Trainer:
         print(f"正在使用{self.device}")
 
     # 保存模型检查点
-    def save_checkpoint(self, epoch):
+    def save_checkpoint(self, epoch, train_losses, val_losses, train_accuracies, val_accuracies):
         state = {
             'epoch': epoch,
             'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict()
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'train_losses': train_losses,
+            'val_losses': val_losses,
+            'train_accuracies': train_accuracies,
+            'val_accuracies': val_accuracies
         }
         model_name = self.model.get_name()
         save_path = f"./save_model/{model_name}_epoch_{epoch}.pth"
@@ -101,7 +119,6 @@ class Trainer:
 
             self.model.load_state_dict(checkpoint['model_state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-
             print(f"已加载模型{checkpoint_path}，epoch = {checkpoint['epoch']}")
             return checkpoint
         else:
@@ -109,25 +126,38 @@ class Trainer:
             return {}
 
     # 训练
-    def train(self, num_epoch, checkpoint_path, val_dataset):
+    def train(self, num_epoch, checkpoint_path):
         # 初始化
         checkpoint = self.load_checkpoint(checkpoint_path) # 加载检查点
-        batch_len = len(self.dataLoader) # batch的总数量
+        batch_train_len = len(self.train_dataLoader) # batch的总数量
+        batch_val_len = len(self.val_dataLoader) # batch的总数量
         start_epoch = checkpoint.get('epoch', 0) + 1
+        train_losses = checkpoint.get('train_losses', []) # 训练损失
+        val_losses = checkpoint.get('val_losses', []) # 验证损失
+        train_accuracies = checkpoint.get('train_accuracies', [])
+        val_accuracies = checkpoint.get('val_accuracies', [])
+        len_trainset = len(self.train_dataset)
+        len_valset = len(self.val_dataset)
 
         for epoch in range (start_epoch, num_epoch + 1):
-            print(f"\nepoch: {epoch} / {num_epoch}")
-            epoch_loss = 0.0
-            start_time = time.time()
+            print(f"epoch: {epoch} / {num_epoch}", flush=True)
+            epoch_train_loss = 0.0
+            epoch_val_loss = 0.0
             
-            for batch_idx, (x, y) in enumerate(self.dataLoader):
-                print(f"\rbatch_index: {batch_idx + 1} / {batch_len}", end="", flush=True)
+            # 训练
+            self.model.train()
+            start_time = time.time()
+            train_correct_num = 0 # 样本级
+            for batch_idx, (x, y) in enumerate(self.train_dataLoader):
+                print(f"{batch_idx} / {batch_train_len}", end="\r",flush=True)
                 x, y = x.to(self.device), y.to(self.device)
-
+# end="\r"
                 # 前向传播
                 output = self.model(x).to(self.device) # 模型输出
                 batch_loss = self.loss_function(output, y).to(self.device) # 当前batch的损失
-                epoch_loss += batch_loss.item()
+                epoch_train_loss += batch_loss.item()
+                probs = torch.sigmoid(output) # Sigmoid激活后的概率
+                train_correct_num += torch.all((probs > 0.5).int() == y, dim=1).sum().item()
 
                 # 反向传播及优化
                 self.optimizer.zero_grad()
@@ -135,21 +165,43 @@ class Trainer:
                 self.optimizer.step()
 
             seconds = time.time() - start_time
-            print("\r" + " " * 50 + "\r")
             print(f"{int(seconds // 60)}分{seconds % 60:.2f}秒")
 
-            # 平均误差
-            avg_loss = epoch_loss / batch_len
-            print(f'\r训练集：平均误差 = {avg_loss}')
-
-            # 保存
-            if epoch % 2 == 0 or epoch == num_epoch:
-                self.save_checkpoint(epoch)
+            # 平均训练误差和准确率
+            avg_train_loss = epoch_train_loss / len_trainset
+            train_acc = train_correct_num / len_trainset
+            train_losses.append(avg_train_loss)
+            train_accuracies.append(train_acc)
+            print(f'训练集：平均误差 = {avg_train_loss*100:.2f}% 准确率 = {train_acc}')
 
             # 验证
-            if epoch % 4 == 0:
-                save_path = f"./save_model/{self.model.get_name()}_epoch_{epoch}.pth"
-                self.tester.test(save_path, val_dataset, self.batch_size, self.num_workers)
+            self.model.eval()
+            start_time = time.time()
+            val_correct_num = 0 # 样本级
+            with torch.no_grad(): # 不计算梯度
+                for batch_idx, (x, y) in enumerate(self.val_dataLoader):
+                    print(f"{batch_idx} / {batch_val_len}", end="\r",flush=True)
+                    x, y = x.to(self.device), y.to(self.device)
+
+                    # 前向传播
+                    output = self.model(x).to(self.device) # 模型输出
+                    batch_loss = self.loss_function(output, y).to(self.device) # 当前batch的损失
+                    epoch_val_loss += batch_loss.item()
+                    probs = torch.sigmoid(output) # Sigmoid激活后的概率
+                    val_correct_num += torch.all((probs > 0.5).int() == y, dim=1).sum().item()
+
+            seconds = time.time() - start_time
+            print(f"{int(seconds // 60)}分{seconds % 60:.2f}秒")
+
+            # 平均训练误差和准确率
+            avg_val_loss = epoch_val_loss / len_valset
+            val_acc = val_correct_num / len_valset
+            val_losses.append(avg_val_loss)
+            val_accuracies.append(val_acc)
+            print(f'验证集：平均误差 = {avg_val_loss*100:.2f}% 准确率 = {val_acc}')
+
+            # 保存
+            self.save_checkpoint(epoch, train_losses, val_losses, train_accuracies, val_accuracies)
 
 
 # 测试
@@ -202,7 +254,6 @@ class Tester:
 
         with torch.no_grad(): # 不计算梯度
             for batch_idx, (x, y) in enumerate(dataLoader):
-                print(f"\rbatch_index: {batch_idx + 1} / {batch_len}", end="", flush=True)
                 x, y = x.to(self.device), y.to(self.device)
     
                 # 前向传播
@@ -217,8 +268,9 @@ class Tester:
         
         # 平均误差
         avg_loss = total_loss / batch_len
-        print(f"\r测试或验证集：平均误差 = {avg_loss}")
-        print(f"测试或验证集：预测正确数量 = {correct_num} / {len(dataset)}")
+        path = dataset.get_imgs_path()
+        print(f"{path}：平均误差 = {avg_loss}")
+        print(f"{path}：预测正确率 = {correct_num} / {len(dataset)} = {correct_num / len(dataset)}")
         '''
         评价指标
         '''
