@@ -34,13 +34,6 @@
     * Arcfaceloss可用于优化细粒度分类问题，论文和MindSpore 1的参考代码
     * https://arxiv.org/abs/1801.07698
 
-
-# 运行结果
-* LeNet5，100 epoch
-    ![alt text](assets/image-8.png)
-    ![alt text](assets/image-7.png)
-
-
 # 模型
 1. LeNet
     * [模型介绍](https://blog.csdn.net/qq_43307074/article/details/126022041)
