@@ -172,7 +172,7 @@ class Trainer:
             train_acc = train_correct_num / len_trainset
             train_losses.append(avg_train_loss)
             train_accuracies.append(train_acc)
-            print(f'训练集：平均误差 = {avg_train_loss*100:.2f}% 准确率 = {train_acc}')
+            print(f'训练集：平均误差 = {avg_train_loss} 准确率 = {train_acc*100:.2f}%')
 
             # 验证
             self.model.eval()
@@ -198,7 +198,7 @@ class Trainer:
             val_acc = val_correct_num / len_valset
             val_losses.append(avg_val_loss)
             val_accuracies.append(val_acc)
-            print(f'验证集：平均误差 = {avg_val_loss*100:.2f}% 准确率 = {val_acc}')
+            print(f'验证集：平均误差 = {avg_val_loss} 准确率 = {val_acc*100:.2f}%')
 
             # 保存
             self.save_checkpoint(epoch, train_losses, val_losses, train_accuracies, val_accuracies)
