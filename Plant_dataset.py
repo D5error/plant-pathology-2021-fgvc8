@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from torch.utils.data import DataLoader
 import torch
-
+import matplotlib.pyplot as plt
 
 # 加载数据集
 class Plant_dataset:
@@ -64,7 +64,7 @@ class Plant_dataset:
 
 # 训练
 class Trainer:
-    def __init__(self, train_dataset, val_dataset, batch_size, num_workers, model, optimizer, loss_function):
+    def __init__(self, train_dataset, val_dataset, batch_size, num_workers, model, optimizer, loss_function, save_path):
         self.train_dataLoader = DataLoader(
             dataset = train_dataset, 
             batch_size = batch_size, 
@@ -80,6 +80,7 @@ class Trainer:
             pin_memory = True
         )
 
+        self.save_path = save_path
         self.train_dataset = train_dataset
         self.val_dataset = val_dataset
         self.num_workers = num_workers
@@ -105,7 +106,7 @@ class Trainer:
             'val_accuracies': val_accuracies
         }
         model_name = self.model.get_name()
-        save_path = f"./save_model/{model_name}_epoch_{epoch}.pth"
+        save_path = f"{self.save_path}/{model_name}_epoch_{epoch}.pth"
         torch.save(state, save_path)
         print(f"模型已保存至{save_path}")
 
@@ -149,9 +150,11 @@ class Trainer:
             start_time = time.time()
             train_correct_num = 0 # 样本级
             for batch_idx, (x, y) in enumerate(self.train_dataLoader):
-                print(f"{batch_idx} / {batch_train_len}", end="\r",flush=True)
+                if batch_idx % (batch_train_len / 10) == 0:
+                    print(f"{batch_idx} / {batch_train_len}", end="\r",flush=True)
+
                 x, y = x.to(self.device), y.to(self.device)
-# end="\r"
+
                 # 前向传播
                 output = self.model(x).to(self.device) # 模型输出
                 batch_loss = self.loss_function(output, y).to(self.device) # 当前batch的损失
@@ -172,7 +175,8 @@ class Trainer:
             train_acc = train_correct_num / len_trainset
             train_losses.append(avg_train_loss)
             train_accuracies.append(train_acc)
-            print(f'训练集：平均误差 = {avg_train_loss} 准确率 = {train_acc*100:.2f}%')
+            print(f'训练集：平均误差 = {avg_train_loss} 准确率 = {train_acc*100:.6f}%')
+
 
             # 验证
             self.model.eval()
@@ -180,7 +184,9 @@ class Trainer:
             val_correct_num = 0 # 样本级
             with torch.no_grad(): # 不计算梯度
                 for batch_idx, (x, y) in enumerate(self.val_dataLoader):
-                    print(f"{batch_idx} / {batch_val_len}", end="\r",flush=True)
+                    if batch_idx % (batch_val_len / 10) == 0:
+                        print(f"{batch_idx} / {batch_val_len}", end="\r",flush=True)
+                        
                     x, y = x.to(self.device), y.to(self.device)
 
                     # 前向传播
@@ -198,7 +204,7 @@ class Trainer:
             val_acc = val_correct_num / len_valset
             val_losses.append(avg_val_loss)
             val_accuracies.append(val_acc)
-            print(f'验证集：平均误差 = {avg_val_loss} 准确率 = {val_acc*100:.2f}%')
+            print(f'验证集：平均误差 = {avg_val_loss} 准确率 = {val_acc*100:.6f}%')
 
             # 保存
             self.save_checkpoint(epoch, train_losses, val_losses, train_accuracies, val_accuracies)
@@ -206,14 +212,14 @@ class Trainer:
 
 # 测试
 class Tester:
-    def __init__(self, model, loss_function, optimizer, threshold=0.5):
+    def __init__(self, model, loss_function, threshold=0.5):
         self.threshold = threshold
         self.loss_function = loss_function
-        self.optimizer = optimizer
         self.model = model
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu' # 如果有NVIDA显卡，转到GPU训练，否则用CPU
         
         model.to(self.device)
+
 
     # 加载模型检查点
     def load_checkpoint(self, checkpoint_path):
@@ -224,7 +230,6 @@ class Tester:
                 checkpoint = torch.load(checkpoint_path, weights_only=True)
 
             self.model.load_state_dict(checkpoint['model_state_dict'])
-            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
             print(f"已加载模型{checkpoint_path}，epoch = {checkpoint['epoch']}")
             return checkpoint
@@ -248,9 +253,16 @@ class Tester:
         if len(checkpoint) == 0:
             return
         self.model.eval() # 设置为评估模式
-        total_loss = 0.0
-        batch_len = len(dataLoader) # batch的数量
-        correct_num = 0 # 预测正确的数量
+        total_test_loss = 0.0
+        test_correct_num = 0 # 预测正确的数量
+        len_testset = len(dataset)
+
+
+        epoch = checkpoint.get('epoch', 0)
+        train_losses = checkpoint.get('train_losses', []) # 训练损失
+        val_losses = checkpoint.get('val_losses', []) # 验证损失
+        train_accuracies = checkpoint.get('train_accuracies', [])
+        val_accuracies = checkpoint.get('val_accuracies', [])
 
         with torch.no_grad(): # 不计算梯度
             for batch_idx, (x, y) in enumerate(dataLoader):
@@ -261,19 +273,31 @@ class Tester:
                 batch_loss = self.loss_function(output, y).to(self.device) # 当前batch的损失
                 probs = torch.sigmoid(output) # Sigmoid激活后的概率
                 correct = torch.all((probs > self.threshold).int() == y, dim=1).sum().item()
-                correct_num = correct_num + correct
+                test_correct_num += correct
 
                 # 保存
-                total_loss += batch_loss.item()
+                total_test_loss += batch_loss.item()
         
         # 平均误差
-        avg_loss = total_loss / batch_len
+        avg_test_loss = total_test_loss / len_testset
+        test_acc = test_correct_num / len_testset
         path = dataset.get_imgs_path()
-        print(f"{path}：平均误差 = {avg_loss}")
-        print(f"{path}：预测正确率 = {correct_num} / {len(dataset)} = {correct_num / len(dataset)}")
-        '''
-        评价指标
-        '''
+        print(f"{path}：平均误差 = {avg_test_loss} 准确率 = {test_acc*100:.6f}%")
+
+
+        plt.plot(range(epoch), train_losses, label="train")
+        plt.plot(range(epoch), val_losses, label="val")
+        plt.xlabel("epoch")
+        plt.ylabel("loss")
+        plt.legend()
+        plt.show()
+
+        plt.scatter(range(epoch), train_accuracies, label="train")
+        plt.scatter(range(epoch), val_accuracies, label="val")
+        plt.xlabel("epoch")
+        plt.ylabel("accuracy")
+        plt.legend()
+        plt.show()
 
 # 预测一张图片
 def predict_img(img_path, transform, model, model_path, labels_name, optimizer):

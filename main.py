@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from torchvision import transforms
 import torch.jit
-import torch
 from Plant_dataset import *
 from models import *
 import torch.multiprocessing
@@ -70,47 +69,49 @@ if __name__ == "__main__":
         "./plant_dataset/train/train_label.csv",
         "./plant_dataset/train/images",
         labels_name, transform)
-    # test_dataset = Plant_dataset(
-    #     "./plant_dataset/test/test_label.csv",
-    #     "./plant_dataset/test/images",
-    #     labels_name, transform)
+    test_dataset = Plant_dataset(
+        "./plant_dataset/test/test_label.csv",
+        "./plant_dataset/test/images",
+        labels_name, transform)
     validate_dataset = Plant_dataset(
         "./plant_dataset/val/val_label.csv",
         "./plant_dataset/val/images",
         labels_name, transform)
 
     # 模型
-    # LeNet5 = select_model("LeNet5")
+    LeNet5 = select_model("LeNet5")
     Vgg16 = select_model("Vgg16")
+    Vgg19 = select_model("Vgg19")
+    Deep_ViT = select_model("Deep_ViT")
 
     # 训练
-    train_model = Vgg16 # 使用的模型
+    train_model = Deep_ViT # 使用的模型
     trainer = Trainer(
         train_dataset = train_dataset, # 训练集
         val_dataset = validate_dataset, # 验证集
-        batch_size = 64, # 批量大小
+        batch_size = 8, # 批量大小
         num_workers = 6, # 加载数据时的并行度
         model = train_model,
-        optimizer = torch.optim.SGD(train_model.parameters(), lr=1e-5, momentum=1), # 优化器(随机梯度下降法)
+        optimizer = torch.optim.SGD(train_model.parameters(), lr=1e-5, momentum=0.8), # 优化器(随机梯度下降法)
         loss_function = torch.nn.BCEWithLogitsLoss(), # 损失函数
+        save_path = r".\save_model", # 保存路径
     )
     trainer.train(
-        num_epoch = 100, # 训练轮数
-        checkpoint_path = ".", # 检查点
+        num_epoch = 1000, # 训练轮数
+        checkpoint_path = r".\save_model\Deep_ViT_epoch_36.pth", # 检查点
     )
 
     # 测试
-    # test_model = LeNet5 # 使用的模型
+    # test_model = Vgg16 # 使用的模型
     # tester = Tester(
     #     model = test_model,
     #     loss_function = BinaryCrossEntropyLoss(), # 损失函数
-    #     optimizer = torch.optim.SGD(test_model.parameters(), lr=1e-5, momentum=0.5), # 优化器
     # )
     # tester.test(
-    #     checkpoint_path = "./save_model/LeNet5_epoch_198.pth", # 检查点
-    #     batch_size = 8, # 批量大小
+    #     checkpoint_path = "./save_model/Vgg16_epoch_35.pth", # 检查点
+    #     batch_size = 128, # 批量大小
     #     num_workers = 6, # 加载数据时的并行度
-    #     dataset = train_dataset, # 测试集
+    #     dataset = test_dataset, # 测试集
     # )
 
     # 图片预测
